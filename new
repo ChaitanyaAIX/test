@@ -1,0 +1,169 @@
+import React from 'react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+
+jest.mock('@dagrejs/dagre', () => ({
+  graphlib: {
+    Graph: class {
+      setDefaultEdgeLabel() {}
+
+      setGraph() {}
+
+      setNode() {}
+
+      setEdge() {}
+
+      node() {
+        return { x: 100, y: 100 };
+      }
+    },
+  },
+  layout: jest.fn(),
+}));
+
+jest.mock('@pega/cosmos-react-core', () => {
+  const StyledPlaceholder = () => null;
+  return {
+    __esModule: true,
+    withConfiguration: (c: unknown) => c,
+    registerIcon: jest.fn(),
+    Icon: () => <span data-testid="cosmos-icon" />,
+    Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+    Card: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+    CardHeader: ({ children, actions }: { children?: React.ReactNode; actions?: React.ReactNode }) => (
+      <div>
+        {actions}
+        {children}
+      </div>
+    ),
+    CardContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+    Button: ({
+      children,
+      onClick,
+      label,
+    }: {
+      children?: React.ReactNode;
+      onClick?: () => void;
+      label?: string;
+    }) => (
+      <button type="button" onClick={onClick} aria-label={label}>
+        {children}
+      </button>
+    ),
+    Link: ({
+      children,
+      href,
+      onClick,
+    }: {
+      children?: React.ReactNode;
+      href?: string;
+      onClick?: (e: React.MouseEvent) => void;
+    }) => (
+      <a href={href} onClick={onClick}>
+        {children}
+      </a>
+    ),
+    StyledLink: StyledPlaceholder,
+    StyledText: StyledPlaceholder,
+    useTheme: () => ({
+      palette: { foregroundColor: '#000' },
+      base: { palette: { 'foreground-color': '#111', 'primary-background': '#fff' } },
+    }),
+  };
+});
+
+jest.mock('reactflow', () => {
+  const ReactLib = require('react');
+  const { useState, useCallback } = ReactLib;
+  return {
+    __esModule: true,
+    default: ({ children }: { children?: React.ReactNode }) => (
+      <div data-testid="rf">{children}</div>
+    ),
+    useNodesState: (initial: unknown[]) => {
+      const [nodes, setNodes] = useState(initial);
+      const onNodesChange = useCallback(() => {}, []);
+      return [nodes, setNodes, onNodesChange];
+    },
+    useEdgesState: (initial: unknown[]) => {
+      const [edges, setEdges] = useState(initial);
+      const onEdgesChange = useCallback(() => {}, []);
+      return [edges, setEdges, onEdgesChange];
+    },
+    useReactFlow: () => ({ fitView: jest.fn() }),
+    ReactFlowProvider: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+    MiniMap: () => <div data-testid="minimap" />,
+    Controls: () => <div data-testid="controls" />,
+    MarkerType: { ArrowClosed: 'ArrowClosed' },
+    ConnectionMode: { Loose: 'Loose' },
+    Handle: () => <span data-testid="rf-handle" />,
+    Position: { Top: 'top', Bottom: 'bottom' },
+  };
+});
+
+jest.mock('@pega/cosmos-react-core/lib/components/Icon/icons/user.icon', () => ({}), {
+  virtual: true,
+});
+jest.mock('@pega/cosmos-react-core/lib/components/Icon/icons/store.icon', () => ({}), {
+  virtual: true,
+});
+jest.mock('@pega/cosmos-react-core/lib/components/Icon/icons/reset.icon', () => ({}), {
+  virtual: true,
+});
+
+jest.mock('../../src/components/custom-sdk/template/RB_Components_NetworkDiagram/styles', () => {
+  const ReactLib = require('react');
+  return ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
+});
+
+function setupWindowPCore() {
+  (window as unknown as { PCore: Record<string, unknown> }).PCore = {
+    getDataPageUtils: () => ({
+      getPageDataAsync: jest.fn(async () => ({
+        pyNodes: [
+          { pyID: 'N1', pyCategory: 'Person', pyLabel: 'A', pzInsKey: 'K1', pyClassName: 'C1' },
+        ],
+        pyEdges: [{ pyID: 'E1', pyFrom: 'N1', pyTo: 'N1', pyCategory: 'FRIEND', pyLabel: 'L1' }],
+      })),
+    }),
+    getSemanticUrlUtils: () => ({
+      getResolvedSemanticURL: jest.fn(() => ''),
+      getActions: () => ({ ACTION_OPENWORKBYHANDLE: 'OPEN' }),
+    }),
+  };
+}
+
+describe('RB_Components_NetworkDiagram/index', () => {
+  beforeEach(() => {
+    setupWindowPCore();
+  });
+
+  it('renders network diagram and refresh button', async () => {
+    const { default: Diagram } = await import(
+      '../../src/components/custom-sdk/template/RB_Components_NetworkDiagram'
+    );
+    const pConn = {
+      getContextName: () => 'CTX',
+      getLocalizedValue: (v: string) => v,
+      getActionsApi: () => ({
+        showCasePreview: jest.fn(),
+        openWorkByHandle: jest.fn(),
+      }),
+    };
+
+    render(
+      <Diagram
+        heading="H1"
+        dataPage="D_Graph"
+        showRefresh
+        edgePath="bezier"
+        getPConnect={() => pConn}
+      />,
+    );
+
+    const reloadBtn = await screen.findByRole('button', { name: /reload diagram/i });
+    fireEvent.click(reloadBtn);
+    await waitFor(() => {
+      expect(screen.getByText('H1')).toBeInTheDocument();
+    });
+  });
+});
