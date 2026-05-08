@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.DS_Store
+*.tsbuildinfo
+.env
+.env.*
+client/
+fxaistudio-shared/
+servers/
+shared/
+pnpm-lock.yaml
+pnpm-workspace.yaml
+package-lock.json
+package.json
